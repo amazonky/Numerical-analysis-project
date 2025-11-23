@@ -1,4 +1,8 @@
 import re
+from typing import Optional
+
+import sqlglot
+from sqlglot import exp
 
 # Simple regex to ensure we only run SELECT statements
 SAFE_SQL = re.compile(r"^\s*select\b", re.IGNORECASE | re.DOTALL)
@@ -40,3 +44,34 @@ def clean_sql(s: str) -> str:
     s = re.sub(r"^sql\s*", "", s, flags=re.IGNORECASE)
     return s.strip().rstrip(";")
 
+
+class SqlValidationError(Exception):
+    pass
+
+
+def validate_with_sqlglot(sql: str, *, table: str) -> str:
+    """
+    Parse and normalize SQL with sqlglot to DuckDB dialect and enforce SELECT-only.
+    Raises SqlValidationError on parse or rule violations.
+    """
+    try:
+        parsed = sqlglot.parse_one(sql, read="duckdb")
+    except Exception as exc:
+        raise SqlValidationError(f"sqlglot parse error: {exc}") from exc
+
+    if not isinstance(parsed, exp.Select):
+        raise SqlValidationError("Only SELECT statements are allowed")
+
+    # Block UNION/CTE recursion that might introduce writes (defensive)
+    if parsed.find(exp.Command):
+        raise SqlValidationError("Command statements are not allowed")
+
+    # Ensure the intended table is referenced
+    table_refs = {t.name.lower() for t in parsed.find_all(exp.Table)}
+    if table.lower() not in table_refs:
+        raise SqlValidationError(f"Query must reference table '{table}'")
+
+    # Normalize to DuckDB dialect string
+    normalized = parsed.sql(dialect="duckdb", pretty=False)
+
+    return normalized

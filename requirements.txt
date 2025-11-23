@@ -5,3 +5,5 @@ pandas
 matplotlib
 tabulate
 tiktoken
+sqlglot
+langgraph
