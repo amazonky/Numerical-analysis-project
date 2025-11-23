@@ -1,0 +1,2 @@
+{"csv": "data/sample_metrics.csv", "question": "Weekly average value per product; last 6 weeks; include WoW change.", "expect_sql_contains": ["avg", "lag"], "expect_min_rows": 1}
+{"csv": "data/sample_metrics.csv", "question": "Top 5 products by total value.", "expect_sql_contains": ["order by", "limit 5"], "expect_min_rows": 1}

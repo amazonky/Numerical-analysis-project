@@ -1,0 +1,7 @@
+langchain
+langchain-community
+duckdb
+pandas
+matplotlib
+tabulate
+tiktoken
