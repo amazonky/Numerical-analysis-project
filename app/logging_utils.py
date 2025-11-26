@@ -71,4 +71,21 @@ def log_run(
             duration_ms,
         ],
     )
+
+    # Also persist successful safe SQL into a compact table for reuse/fine-tuning
+    if safe and not execution_error:
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS safe_queries (
+                id BIGINT,
+                question TEXT,
+                sql TEXT
+            )
+            """
+        )
+        con.execute(
+            "INSERT INTO safe_queries (question, sql) VALUES (?, ?)",
+            [question, sql],
+        )
+
     con.close()
