@@ -9,7 +9,7 @@ from tabulate import tabulate
 
 from .graph_runner import build_graph
 from .logging_utils import log_run
-from .schema_utils import summarize_schema
+from .schema_utils import get_date_bounds, get_date_columns, summarize_schema
 
 
 @dataclass
@@ -40,6 +40,8 @@ def run_pipeline(
     con.execute(f"CREATE TABLE {table_name} AS SELECT * FROM read_csv_auto('{csv_path}')")
 
     schema_txt, stats_txt = summarize_schema(con, table_name)
+    date_columns = [c.lower() for c in get_date_columns(con, table_name)]
+    date_bounds = get_date_bounds(con, table_name, date_columns)
     llm = OllamaLLM(model=model)
 
     # Build LangGraph pipeline
@@ -56,6 +58,8 @@ def run_pipeline(
         "con": con,
         "schema_txt": schema_txt,
         "stats_txt": stats_txt or "(no numeric preview available)",
+        "date_columns": date_columns,
+        "date_bounds": date_bounds,
     }
 
     state = graph.invoke(initial_state)
@@ -114,9 +118,12 @@ def format_result(result: RunResult, limit: int) -> str:
         lines.append(str(result.error))
     else:
         lines.append(f"\n---- RESULT (up to {limit} rows) ----")
-        lines.append(
-            tabulate(result.df.head(limit), headers="keys", tablefmt="github", showindex=False)  # type: ignore[arg-type]
-        )
+        if result.df is not None and not result.df.empty:
+            lines.append(
+                tabulate(result.df.head(limit), headers="keys", tablefmt="github", showindex=False)  # type: ignore[arg-type]
+            )
+        else:
+            lines.append("(no rows)")
         if result.explanation:
             lines.append("\n---- EXPLANATION ----")
             lines.append(result.explanation)

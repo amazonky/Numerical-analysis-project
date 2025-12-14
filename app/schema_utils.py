@@ -1,4 +1,5 @@
 import duckdb
+from typing import Dict, Iterable, List, Optional, Tuple
 
 
 def summarize_schema(con: duckdb.DuckDBPyConnection, table: str):
@@ -35,3 +36,36 @@ def summarize_schema(con: duckdb.DuckDBPyConnection, table: str):
             stats_txt = "(stats unavailable)"
     return schema_txt, stats_txt
 
+
+def get_date_columns(con: duckdb.DuckDBPyConnection, table: str) -> List[str]:
+    """
+    Return list of column names that are date or timestamp-like.
+    """
+    df = con.execute(f"""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = '{table}'
+          AND upper(data_type) IN ('DATE', 'TIMESTAMP', 'TIMESTAMP WITH TIME ZONE', 'TIME')
+        ORDER BY ordinal_position
+    """).fetchdf()
+    return df["column_name"].tolist()
+
+
+def get_date_bounds(
+    con: duckdb.DuckDBPyConnection,
+    table: str,
+    date_columns: Iterable[str],
+) -> Dict[str, Tuple[Optional[str], Optional[str]]]:
+    """
+    Return min/max (as strings) for each date-like column (column names expected normalized for the query).
+    """
+    bounds: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
+    for col in date_columns:
+        try:
+            min_val, max_val = con.execute(
+                f"SELECT CAST(min({col}) AS TEXT), CAST(max({col}) AS TEXT) FROM {table}"
+            ).fetchone()
+            bounds[col.lower()] = (min_val, max_val)
+        except Exception:
+            bounds[col.lower()] = (None, None)
+    return bounds
