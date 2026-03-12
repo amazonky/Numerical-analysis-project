@@ -1,3 +1,5 @@
+import json
+import re
 from typing import Optional, TypedDict
 
 import duckdb
@@ -6,11 +8,9 @@ from langchain_ollama import OllamaLLM
 from langgraph.graph import END, StateGraph
 from sqlglot import exp
 
-from .logging_utils import log_run
-from .prompts import EXPLAIN_PROMPT, SQL_PROMPT
+from .prompts import DECOMPOSER_PROMPT, EXPLAIN_PROMPT, GENERATOR_PROMPT, SELECTOR_PROMPT
 from .repair import repair_sql
-from .safety import is_safe, normalize_sql, validate_with_sqlglot, SqlValidationError
-from .schema_utils import summarize_schema
+from .safety import SqlValidationError, is_safe, normalize_sql, validate_with_sqlglot
 
 
 class State(TypedDict, total=False):
@@ -27,6 +27,9 @@ class State(TypedDict, total=False):
     stats_txt: str
     date_columns: list[str]
     date_bounds: dict[str, tuple[Optional[str], Optional[str]]]
+    selected_columns: list[str]
+    selected_schema_txt: str
+    plan_steps: list[str]
     sql: str
     safe: bool
     df: Optional[pd.DataFrame]
@@ -41,14 +44,28 @@ def _call_llm(llm: OllamaLLM, prompt: str) -> str:
     return llm.invoke(prompt) if hasattr(llm, "invoke") else llm(prompt)
 
 
+def _extract_json_obj(raw: str) -> dict:
+    text = raw.strip()
+    try:
+        obj = json.loads(text)
+        return obj if isinstance(obj, dict) else {}
+    except Exception:
+        pass
+
+    m = re.search(r"\{[\s\S]*\}", text)
+    if not m:
+        return {}
+    try:
+        obj = json.loads(m.group(0))
+        return obj if isinstance(obj, dict) else {}
+    except Exception:
+        return {}
+
+
 def build_graph():
     g = StateGraph(State)
 
     def _extract_date_predicates(sql: str, date_cols: set[str]):
-        """
-        Pull out predicates that reference date/time columns so we can test coverage.
-        Returns (predicate_sql, referenced_cols) or (None, set()).
-        """
         try:
             parsed_expr = exp.parse_one(sql, read="duckdb")
         except Exception:
@@ -87,19 +104,68 @@ def build_graph():
 
         return combined.sql(dialect="duckdb"), referenced
 
-    def generate(state: State):
+    def selector(state: State):
         llm = state["llm"]
+        raw = _call_llm(
+            llm,
+            SELECTOR_PROMPT.format(
+                question=state["question"],
+                schema=state["schema_txt"],
+            ),
+        )
+        obj = _extract_json_obj(raw)
+        selected_columns = obj.get("selected_columns") or []
+        selected_schema = obj.get("selected_schema") or state["schema_txt"]
+
+        if not isinstance(selected_columns, list):
+            selected_columns = []
+        selected_columns = [str(c).strip() for c in selected_columns if str(c).strip()]
+
+        if not isinstance(selected_schema, str) or not selected_schema.strip():
+            selected_schema = state["schema_txt"]
+
+        return {
+            "selected_columns": selected_columns,
+            "selected_schema_txt": selected_schema,
+            "repair_attempts": 0,
+        }
+
+    def decomposer(state: State):
+        llm = state["llm"]
+        raw = _call_llm(
+            llm,
+            DECOMPOSER_PROMPT.format(
+                question=state["question"],
+                selected_schema=state.get("selected_schema_txt") or state["schema_txt"],
+            ),
+        )
+        obj = _extract_json_obj(raw)
+        plan_steps = obj.get("plan_steps") or []
+        if not isinstance(plan_steps, list) or not plan_steps:
+            plan_steps = [
+                "Interpret question intent",
+                "Map required fields to schema",
+                "Compose SQL with proper filters and aggregations",
+                "Validate SQL semantics",
+            ]
+        plan_steps = [str(s).strip() for s in plan_steps if str(s).strip()]
+        return {"plan_steps": plan_steps}
+
+    def generator(state: State):
+        llm = state["llm"]
+        plan_text = "\n".join(f"- {s}" for s in state.get("plan_steps", []))
         raw_sql = _call_llm(
             llm,
-            SQL_PROMPT.format(
+            GENERATOR_PROMPT.format(
                 table_name=state["table_name"],
-                schema=state["schema_txt"],
+                selected_schema=state.get("selected_schema_txt") or state["schema_txt"],
                 stats=state["stats_txt"] or "(no numeric preview available)",
+                plan=plan_text or "- Create a valid query",
                 question=state["question"],
-            )
+            ),
         )
         sql = normalize_sql(raw_sql, state["table_name"])
-        return {"sql": sql, "repair_attempts": 0}
+        return {"sql": sql}
 
     def validate_and_execute(state: State):
         sql = state["sql"]
@@ -123,7 +189,6 @@ def build_graph():
 
         if not error and safe:
             con = state["con"]
-            # If the date filter yields zero rows against the table, short-circuit with a friendly message.
             if date_filter_sql:
                 try:
                     date_only_count = con.execute(f"SELECT COUNT(*) FROM {table} WHERE {date_filter_sql}").fetchone()[0]
@@ -140,14 +205,12 @@ def build_graph():
                         date_range_message = msg
                         return {"sql": sql, "safe": safe, "df": pd.DataFrame(), "error": None, "date_range_message": date_range_message}
                 except Exception:
-                    # If the diagnostic check fails, fall back to normal execution.
                     pass
             try:
                 df = con.execute(sql).fetchdf()
             except Exception as exc:
                 error = str(exc)
 
-        # Fallback: if query ran but returned no rows and there was a date filter, emit the coverage message.
         if not error and date_filter_sql and df is not None and df.empty and not date_range_message:
             bounds_parts = []
             for col in date_cols_in_query:
@@ -165,16 +228,18 @@ def build_graph():
             "date_range_message": date_range_message,
         }
 
-    def needs_repair(state: State):
+    def needs_refine(state: State):
         return state.get("error") is not None and state.get("repair_attempts", 0) < state.get("max_repairs", 0)
 
-    def repair(state: State):
+    def refiner(state: State):
         attempts = state.get("repair_attempts", 0) + 1
+        plan_text = "\n".join(f"- {s}" for s in state.get("plan_steps", []))
         sql = repair_sql(
             state["llm"],
             table_name=state["table_name"],
-            schema=state["schema_txt"],
+            schema=state.get("selected_schema_txt") or state["schema_txt"],
             question=state["question"],
+            plan=plan_text,
             previous_sql=state["sql"],
             error=state.get("error") or "unknown error",
         )
@@ -194,26 +259,30 @@ def build_graph():
                 question=state["question"],
                 sql=state["sql"],
                 preview=preview_txt or "(no rows)",
-            )
+            ),
         ).strip()
         return {"explanation": explanation}
 
-    g.add_node("generate", generate)
+    g.add_node("selector", selector)
+    g.add_node("decomposer", decomposer)
+    g.add_node("generator", generator)
     g.add_node("validate_and_execute", validate_and_execute)
-    g.add_node("repair", repair)
+    g.add_node("refiner", refiner)
     g.add_node("explain", explain)
 
-    g.set_entry_point("generate")
-    g.add_edge("generate", "validate_and_execute")
+    g.set_entry_point("selector")
+    g.add_edge("selector", "decomposer")
+    g.add_edge("decomposer", "generator")
+    g.add_edge("generator", "validate_and_execute")
     g.add_conditional_edges(
         "validate_and_execute",
-        needs_repair,
+        needs_refine,
         {
-            True: "repair",
+            True: "refiner",
             False: "explain",
         },
     )
-    g.add_edge("repair", "validate_and_execute")
+    g.add_edge("refiner", "validate_and_execute")
     g.add_edge("explain", END)
 
     return g.compile()

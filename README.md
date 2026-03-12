@@ -41,13 +41,26 @@ Optional flags:
 - `--log-db` path to a DuckDB file that will store prompts/SQL/results for later eval or fine-tuning
 - `--max-repairs` how many times to retry with the repair prompt if SQL is unsafe or fails (default: 1)
 
-## 5) Offline evaluation
+## 5) Offline research-grade benchmark
 
-You can run a small eval suite of questions using the new eval runner. Cases are newline-delimited JSON, e.g. `data/eval_cases.example.jsonl`.
+Use the benchmark runner with case files in JSONL format.
+- legacy lightweight example: `data/eval_cases.example.jsonl`
+- richer benchmark example (with gold SQL): `data/benchmark_cases.example.jsonl`
 
 ```bash
-python eval_runner.py --cases data/eval_cases.example.jsonl --log-db logs.duckdb
+python3 eval_runner.py \
+  --cases data/benchmark_cases.example.jsonl \
+  --model llama3:8b-instruct-q4_K_M \
+  --log-db logs.duckdb \
+  --split dev \
+  --repetitions 1 \
+  --output-dir benchmark_reports
 ```
+
+The runner emits:
+- machine-readable JSON report (metadata + metrics + per-case details)
+- CSV report for analysis
+- summary metrics: success rate, execution accuracy, SQL exact match, component-level F1, failure taxonomy, and 95% Wilson CIs
 
 ## 6) Notes
 

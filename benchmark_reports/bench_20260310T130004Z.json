@@ -1,0 +1,103 @@
+{
+  "run_id": "bench_20260310T130004Z",
+  "created_at_utc": "2026-03-10T13:00:04.608820+00:00",
+  "metadata": {
+    "model": "llama3:8b-instruct-q4_K_M",
+    "cases_path": "data/benchmark_cases.example.jsonl",
+    "split": "dev",
+    "limit": 50,
+    "max_repairs": 1,
+    "log_db": "logs.duckdb",
+    "python_version": "3.11.13 (main, Jun  3 2025, 18:38:25) [Clang 17.0.0 (clang-1700.0.13.3)]",
+    "platform": "macOS-15.6-arm64-arm-64bit",
+    "git_commit": "0411a077d840551b2b4a2654332e1a36f43ca9fd",
+    "prompt_hashes": {
+      "sql_prompt_sha256": "ecbd39a2cd0a80b426f2f5cb57b1e751ad98840927821f8647678148d00fb905",
+      "repair_prompt_sha256": "a2c3b5d97742f1a8b98f879fac5c83f3ed381f302e1f8c4959b266978bcc9bd0",
+      "explain_prompt_sha256": "6991f2743093f8ba398430b8dffee92ad8de4aeda1c9570fb8cb21dc2c84aa60"
+    },
+    "created_at_utc": "2026-03-10T13:00:04.608820+00:00"
+  },
+  "summary": {
+    "total_cases": 2,
+    "passed_cases": 0,
+    "success_rate": 0.0,
+    "execution_accuracy": 0.0,
+    "sql_exact_match_rate": 0.0,
+    "avg_duration_ms": 16083.956599235535,
+    "component_f1_macro": {
+      "group_by": 0.5,
+      "joins": 1.0,
+      "order_by": 0.5,
+      "select": 0.611111,
+      "tables": 0.833333,
+      "where": 0.0
+    },
+    "failure_breakdown": {
+      "sql_exact_mismatch": 1,
+      "execution_error": 1
+    }
+  },
+  "results": [
+    {
+      "case_id": "sm_001",
+      "split": "dev",
+      "question": "Top 3 products by total value.",
+      "success": false,
+      "safe": true,
+      "error": null,
+      "sql": "SELECT product, SUM(value) AS total_value FROM data WHERE date >= CURRENT_DATE - INTERVAL '1' WEEK GROUP BY product ORDER BY total_value DESC LIMIT 3",
+      "row_count": 0,
+      "duration_ms": 12354.519844055176,
+      "failure_category": "sql_exact_mismatch",
+      "sql_exact_match": false,
+      "execution_match": false,
+      "sql_component_f1": {
+        "select": 1.0,
+        "where": 0.0,
+        "group_by": 1.0,
+        "order_by": 1.0,
+        "joins": 1.0,
+        "tables": 1.0
+      },
+      "result_hash_pred": "37db73573ce6398d84c411c85ca2c38f24bb112a2e9fb96a6dc49a8a98ccaf52",
+      "result_hash_gold": "894f397bc7431b8fb051016874e7cc7d1374191d55759cd6bcbc9af6665f9719",
+      "details": {
+        "contains_ok": true,
+        "min_rows_ok": false,
+        "execution_detail": "row content mismatch",
+        "repair_attempts": 0
+      }
+    },
+    {
+      "case_id": "sm_002",
+      "split": "dev",
+      "question": "Average weekly value per product with week-over-week change.",
+      "success": false,
+      "safe": false,
+      "error": "Binder Error: column \"value\" must appear in the GROUP BY clause or must be part of an aggregate function.\nEither add it to the GROUP BY list, or use \"ANY_VALUE(value)\" if the exact value of \"value\" is not important.\n\nLINE 1: ... AS DATE)) AS d, product, SUM(quantity * price) AS value, LAG(value, 1, 0) OVER (PARTITION BY product ORDER BY d) AS prev...\n                                                                         ^",
+      "sql": "SELECT DATE_TRUNC('WEEK', CAST(date AS DATE)) AS d, product, SUM(quantity * price) AS value, LAG(value, 1, 0) OVER (PARTITION BY product ORDER BY d) AS prev_value, value - LAG(value, 1, 0) OVER (PARTITION BY product ORDER BY d) AS week_over_week_change FROM data WHERE date >= CURRENT_DATE - INTERVAL '52' WEEK GROUP BY d, product",
+      "row_count": null,
+      "duration_ms": 19813.393354415894,
+      "failure_category": "execution_error",
+      "sql_exact_match": false,
+      "execution_match": false,
+      "sql_component_f1": {
+        "select": 0.222222,
+        "where": 0.0,
+        "group_by": 0.0,
+        "order_by": 0.0,
+        "joins": 1.0,
+        "tables": 0.666667
+      },
+      "result_hash_pred": null,
+      "result_hash_gold": "773fac352b5a662a17441f5c5591dca499ba02de704dbf6a7c2ff27d80451c4d",
+      "details": {
+        "contains_ok": true,
+        "min_rows_ok": false,
+        "execution_detail": "predicted query did not produce a dataframe",
+        "repair_attempts": 1
+      }
+    }
+  ]
+}

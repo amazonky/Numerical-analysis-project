@@ -1,9 +1,48 @@
 import textwrap
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
-# Core SQL generation prompt
-SQL_PROMPT = PromptTemplate.from_template(textwrap.dedent("""
-You are a data analyst writing ONE safe DuckDB SQL query.
+# Selector agent prompt
+SELECTOR_PROMPT = PromptTemplate.from_template(textwrap.dedent("""
+You are the Selector agent in a multi-agent Text2SQL system.
+Select the minimal schema subset needed for the question.
+
+Return strict JSON only:
+{{
+  "selected_columns": ["col1", "col2"],
+  "selected_schema": "- col1 TYPE\\n- col2 TYPE"
+}}
+
+Rules:
+- Only include columns that exist in the full schema.
+- Keep the selected subset concise and sufficient.
+
+Question:
+{question}
+
+Full schema:
+{schema}
+"""))
+
+# Decomposer agent prompt
+DECOMPOSER_PROMPT = PromptTemplate.from_template(textwrap.dedent("""
+You are the Decomposer agent in a multi-agent Text2SQL system.
+Create short planning steps for constructing SQL.
+
+Return strict JSON only:
+{{
+  "plan_steps": ["step 1", "step 2", "step 3"]
+}}
+
+Question:
+{question}
+
+Selected schema:
+{selected_schema}
+"""))
+
+# Generator agent prompt
+GENERATOR_PROMPT = PromptTemplate.from_template(textwrap.dedent("""
+You are the Generator agent writing ONE safe DuckDB SQL query.
 
 Rules:
 - Use ONLY table name: {table_name}
@@ -18,11 +57,14 @@ Rules:
 
 Return ONLY the SQL.
                                                           
-Table schema:
-{schema}
+Selected schema:
+{selected_schema}
 
 Sample numeric stats (for reference):
 {stats}
+
+Plan:
+{plan}
 
 User question:
 {question}
@@ -45,7 +87,7 @@ Result preview (first rows):
 {preview}
 """))
 
-# Repair prompt for unsafe or failing SQL
+# Refiner prompt for unsafe or failing SQL
 REPAIR_PROMPT = PromptTemplate.from_template(textwrap.dedent("""
 You must return one safe DuckDB SELECT query only.
 
@@ -66,6 +108,9 @@ Schema:
 
 Original question:
 {question}
+
+Plan:
+{plan}
 
 Previous SQL:
 {previous_sql}
