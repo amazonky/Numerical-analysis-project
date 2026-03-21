@@ -69,7 +69,9 @@ def run_pipeline(
     error = state.get("error")
     explanation = state.get("explanation")
     repair_attempts = state.get("repair_attempts", 0)
-    safe_flag = error is None and state.get("safe", False)
+    # Safety is a property of SQL validation and should be tracked independently
+    # from execution success/failure.
+    safe_flag = bool(state.get("safe", False))
 
     duration_ms = (time.time() - start) * 1000
     preview_txt = df.head(min(limit, 10)).to_markdown(index=False) if df is not None else None

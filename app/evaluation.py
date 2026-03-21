@@ -12,7 +12,7 @@ import duckdb
 import pandas as pd
 
 from .benchmarking import compare_results, normalize_sql_for_match, result_hash, score_sql_components
-from .prompts import EXPLAIN_PROMPT, REPAIR_PROMPT, SQL_PROMPT
+from .prompts import EXPLAIN_PROMPT, GENERATOR_PROMPT, REPAIR_PROMPT
 from .runner import run_pipeline
 
 
@@ -95,7 +95,8 @@ def _prompt_hashes() -> Dict[str, str]:
         return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
     return {
-        "sql_prompt_sha256": h(SQL_PROMPT.template),
+        # Backward-compatible key name kept for existing reports/consumers.
+        "sql_prompt_sha256": h(GENERATOR_PROMPT.template),
         "repair_prompt_sha256": h(REPAIR_PROMPT.template),
         "explain_prompt_sha256": h(EXPLAIN_PROMPT.template),
     }
