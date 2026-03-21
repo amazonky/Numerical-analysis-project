@@ -66,10 +66,13 @@ class BenchmarkSummary:
     unique_cases: int
     repetitions: int
     passed_case_evals: int
-    success_rate: float
+    successful_execution_rate: float
+    failed_execution_count: int
     success_rate_ci95: Optional[Tuple[float, float]]
     execution_accuracy: Optional[float]
     execution_accuracy_ci95: Optional[Tuple[float, float]]
+    syntax_error_rate: float
+    correction_success_rate: Optional[float]
     sql_exact_match_rate: Optional[float]
     sql_exact_match_ci95: Optional[Tuple[float, float]]
     avg_duration_ms: Optional[float]
@@ -360,16 +363,23 @@ def run_benchmark(
     success_ci = _wilson_ci(passed, total)
     exec_pass = sum(1 for r in exec_cases if r.execution_match)
     exact_pass = sum(1 for r in em_cases if r.sql_exact_match)
+    failed = total - passed
+    syntax_errors = failure_breakdown.get("parse_error", 0)
+    repair_attempted = [r for r in results if int(r.details.get("repair_attempts") or 0) > 0]
+    repair_successes = sum(1 for r in repair_attempted if r.success)
 
     summary = BenchmarkSummary(
         total_case_evals=total,
         unique_cases=len(cases),
         repetitions=max(1, repetitions),
         passed_case_evals=passed,
-        success_rate=(passed / total) if total else 0.0,
+        successful_execution_rate=(passed / total) if total else 0.0,
+        failed_execution_count=failed,
         success_rate_ci95=success_ci,
         execution_accuracy=(exec_pass / len(exec_cases)) if exec_cases else None,
         execution_accuracy_ci95=_wilson_ci(exec_pass, len(exec_cases)) if exec_cases else None,
+        syntax_error_rate=(syntax_errors / total) if total else 0.0,
+        correction_success_rate=(repair_successes / len(repair_attempted)) if repair_attempted else None,
         sql_exact_match_rate=(exact_pass / len(em_cases)) if em_cases else None,
         sql_exact_match_ci95=_wilson_ci(exact_pass, len(em_cases)) if em_cases else None,
         avg_duration_ms=_mean(durations),

@@ -44,10 +44,17 @@ def main():
         f"Case evals: {summary.total_case_evals} "
         f"(unique cases={summary.unique_cases}, repetitions={summary.repetitions})"
     )
-    print(f"Passed: {summary.passed_case_evals} | Success rate: {summary.success_rate:.3f}")
+    print(f"Passed: {summary.passed_case_evals}")
+    print(f"% successful execution: {summary.successful_execution_rate:.3f}")
+    print(f"Failed execution count: {summary.failed_execution_count}")
+    print(f"Syntax error rate: {summary.syntax_error_rate:.3f}")
+    if summary.correction_success_rate is not None:
+        print(f"Correction success rate: {summary.correction_success_rate:.3f}")
+    else:
+        print("Correction success rate: N/A (no repair attempts)")
     if summary.success_rate_ci95 is not None:
         lo, hi = summary.success_rate_ci95
-        print(f"Success rate 95% CI: [{lo:.3f}, {hi:.3f}]")
+        print(f"% successful execution 95% CI: [{lo:.3f}, {hi:.3f}]")
 
     if summary.execution_accuracy is not None:
         print(f"Execution accuracy: {summary.execution_accuracy:.3f}")

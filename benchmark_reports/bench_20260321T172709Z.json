@@ -1,0 +1,129 @@
+{
+  "run_id": "bench_20260321T172709Z",
+  "created_at_utc": "2026-03-21T17:27:09.948546+00:00",
+  "metadata": {
+    "model": "llama3:8b-instruct-q4_K_M",
+    "cases_path": "data/benchmark_cases.example.jsonl",
+    "split": "dev",
+    "limit": 50,
+    "max_repairs": 1,
+    "log_db": "logs.duckdb",
+    "repetitions": 1,
+    "strict_cases": false,
+    "python_version": "3.9.6 (default, Dec  2 2025, 07:27:58) \n[Clang 17.0.0 (clang-1700.6.3.2)]",
+    "platform": "macOS-15.6-arm64-arm-64bit",
+    "git_commit": "cbae2375db2b7a01a75465677c82047e9a9091db",
+    "prompt_hashes": {
+      "sql_prompt_sha256": "093de4f62103a27e9130dbde3b9278b249b049d25e680a227635814974ecfb6b",
+      "repair_prompt_sha256": "dfccfb3623d621c37dcc99608a3ef63918e31947f81100cbe3dd8a98aeb903b1",
+      "explain_prompt_sha256": "6991f2743093f8ba398430b8dffee92ad8de4aeda1c9570fb8cb21dc2c84aa60"
+    },
+    "created_at_utc": "2026-03-21T17:27:09.948546+00:00"
+  },
+  "case_validation": {
+    "valid": true,
+    "warnings": [],
+    "errors": []
+  },
+  "summary": {
+    "total_case_evals": 2,
+    "unique_cases": 2,
+    "repetitions": 1,
+    "passed_case_evals": 0,
+    "successful_execution_rate": 0.0,
+    "failed_execution_count": 2,
+    "success_rate_ci95": [
+      0.0,
+      0.6576280471103807
+    ],
+    "execution_accuracy": 0.0,
+    "execution_accuracy_ci95": [
+      0.0,
+      0.6576280471103807
+    ],
+    "syntax_error_rate": 0.0,
+    "correction_success_rate": 0.0,
+    "sql_exact_match_rate": 0.0,
+    "sql_exact_match_ci95": [
+      0.0,
+      0.6576280471103807
+    ],
+    "avg_duration_ms": 39359.37583446503,
+    "std_duration_ms": 9725.57090860964,
+    "component_f1_macro": {
+      "group_by": 0.5,
+      "joins": 1.0,
+      "order_by": 0.5,
+      "select": 0.611111,
+      "tables": 0.833333,
+      "where": 0.0
+    },
+    "failure_breakdown": {
+      "sql_exact_mismatch": 2
+    }
+  },
+  "results": [
+    {
+      "case_id": "sm_001",
+      "split": "dev",
+      "question": "Top 3 products by total value.",
+      "repetition": 1,
+      "success": false,
+      "safe": true,
+      "error": null,
+      "sql": "SELECT product, SUM(value) AS total_value FROM data WHERE date >= CURRENT_DATE - INTERVAL '1' WEEK GROUP BY product ORDER BY total_value DESC LIMIT 3",
+      "row_count": 0,
+      "duration_ms": 46236.392974853516,
+      "failure_category": "sql_exact_mismatch",
+      "sql_exact_match": false,
+      "execution_match": false,
+      "sql_component_f1": {
+        "select": 1.0,
+        "where": 0.0,
+        "group_by": 1.0,
+        "order_by": 1.0,
+        "joins": 1.0,
+        "tables": 1.0
+      },
+      "result_hash_pred": "37db73573ce6398d84c411c85ca2c38f24bb112a2e9fb96a6dc49a8a98ccaf52",
+      "result_hash_gold": "894f397bc7431b8fb051016874e7cc7d1374191d55759cd6bcbc9af6665f9719",
+      "details": {
+        "contains_ok": true,
+        "min_rows_ok": false,
+        "execution_detail": "row content mismatch",
+        "repair_attempts": 1
+      }
+    },
+    {
+      "case_id": "sm_002",
+      "split": "dev",
+      "question": "Average weekly value per product with week-over-week change.",
+      "repetition": 1,
+      "success": false,
+      "safe": true,
+      "error": null,
+      "sql": "SELECT DATE_TRUNC('WEEK', CAST(date AS DATE)) AS d, product, AVG(value) AS avg_value, LAG(AVG(value)) OVER (PARTITION BY product ORDER BY d) AS prev_avg_value, AVG(value) - LAG(AVG(value)) OVER (PARTITION BY product ORDER BY d) AS week_over_week_change FROM data WHERE date >= CURRENT_DATE - INTERVAL '12' WEEK GROUP BY DATE_TRUNC('WEEK', CAST(date AS DATE)), product",
+      "row_count": 0,
+      "duration_ms": 32482.358694076538,
+      "failure_category": "sql_exact_mismatch",
+      "sql_exact_match": false,
+      "execution_match": false,
+      "sql_component_f1": {
+        "select": 0.222222,
+        "where": 0.0,
+        "group_by": 0.0,
+        "order_by": 0.0,
+        "joins": 1.0,
+        "tables": 0.666667
+      },
+      "result_hash_pred": "ceba060f2858690995f6d50bc843828353b7916b530709ccafdd475b2719bf31",
+      "result_hash_gold": "773fac352b5a662a17441f5c5591dca499ba02de704dbf6a7c2ff27d80451c4d",
+      "details": {
+        "contains_ok": true,
+        "min_rows_ok": false,
+        "execution_detail": "column mismatch: predicted=['d', 'product', 'avg_value', 'prev_avg_value', 'week_over_week_change'], gold=['week_start', 'product', 'avg_value', 'wow_change']",
+        "repair_attempts": 1
+      }
+    }
+  ]
+}
