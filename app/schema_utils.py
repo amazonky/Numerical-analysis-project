@@ -23,7 +23,6 @@ def summarize_schema(con: duckdb.DuckDBPyConnection, table: str):
         WHERE table_name = '{table}'
           AND upper(data_type) IN ('DOUBLE', 'INTEGER', 'BIGINT', 'DECIMAL', 'REAL', 'HUGEINT', 'SMALLINT')
         ORDER BY ordinal_position
-        LIMIT 5
     """).fetchdf()['column_name'].tolist()
 
     stats_txt = ""
